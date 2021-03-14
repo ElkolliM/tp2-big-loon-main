@@ -10,6 +10,7 @@
 
 #define TODO printf("TODO!\n");
 
+
 /**
  * Internal function to blocking_q. Takes an element
  * in the queue. This functions assumes the following
@@ -21,8 +22,15 @@
  * @return an element
  */
 task_ptr __blocking_q_take(blocking_q *q) { // NOLINT(bugprone-reserved-identifier)
-    TODO
-    return NULL;
+
+    // actualise
+    blocking_q_node *first = q->first;
+    task_ptr data = first->data;
+
+    q->first = first->next;
+    q->sz = q->sz - 1;
+
+    return data;
 }
 
 /**
@@ -32,9 +40,31 @@ task_ptr __blocking_q_take(blocking_q *q) { // NOLINT(bugprone-reserved-identifi
  * @return if init was successful.
  */
 bool blocking_q_init(blocking_q *q) {
-    TODO
+
+    // init empty queue
+    q->sz = 0;
+    q->first = NULL;
+
+    int err;
+
+    // default mutex init
+    err = pthread_mutex_init(&q->lock, NULL);
+    if (err != 0)
+        printf("ERROR");
+
+    // default cond init
+    err = pthread_cond_init(&q->cond, NULL);
+    if (err != 0)
+        printf("ERROR");
+
+
+    // lock the mutex since the queue is initially empty
+    pthread_mutex_lock(&q->lock);
+
     return false;
 }
+
+
 
 /**
  * Destroy a blocking queue. Removes the allocations of the data
@@ -42,8 +72,23 @@ bool blocking_q_init(blocking_q *q) {
  * @param q ptr to the blocking queue
  */
 void blocking_q_destroy(blocking_q *q) {
-    TODO
+
+    blocking_q_node *curr = q->first;
+    blocking_q_node *next;
+
+    // free queue
+    while (curr != NULL) {
+        next = curr->next;
+        free(curr);
+        curr = next;
+    }
+
+    // free sync. primitives
+    pthread_mutex_destroy(&q->lock);
+    pthread_cond_destroy(&q->cond);
+    return;
 }
+
 
 /**
  * Put a task in the blocking queue. This task can fail if no
@@ -53,7 +98,23 @@ void blocking_q_destroy(blocking_q *q) {
  * @returns if the data was put correctly inside the queue.
  */
 bool blocking_q_put(blocking_q *q, task_ptr data) {
-    TODO
+
+    blocking_q_node *new_node = malloc(sizeof(blocking_q_node));
+    // error with malloc ->
+    if (new_node == NULL) return 0;
+
+    new_node->data = data;
+    new_node->next = NULL;
+
+    blocking_q_node *curr = q->first;
+    while (curr->next != NULL) curr = curr->next;
+
+    curr->next = new_node;
+    q->sz = q->sz + 1;
+
+    if (q->sz == 1) pthread_cond_signal(&q->cond);
+
+    return 1;
 }
 
 /**
